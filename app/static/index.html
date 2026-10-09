@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watchlist Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Tokens: a cool "trading desk" palette. Sentiment colours carry meaning, so
+   cobalt is the only decorative accent. */
+:root {
+  --page: #EEF1F5;
+  --panel: #FFFFFF;
+  --ink: #172131;
+  --muted: #5B6779;
+  --rule: #D8DEE7;
+  --cobalt: #2B50C8;
+  --cobalt-soft: #E4EAFB;
+  --gain: #11795A;
+  --gain-soft: #DDF1E9;
+  --loss: #B3352B;
+  --loss-soft: #F8E1DE;
+  --flat: #8A94A3;
+  --caution-soft: #FFF4D6;
+  --caution-ink: #7A5300;
+  --on-cobalt: #FFFFFF;
+  --radius-lg: 14px;
+  --radius-sm: 8px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0E141D; --panel: #161F2C; --ink: #E7ECF3; --muted: #9AA6B6; --rule: #273244;
+    --cobalt: #7D98F2; --cobalt-soft: #1E2A47; --gain: #4CC497; --gain-soft: #12302A;
+    --loss: #F0776B; --loss-soft: #3A1E1D; --flat: #6F7A8A; --caution-soft: #2E2612; --caution-ink: #E8C46A; --on-cobalt: #0E141D;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #0E141D; --panel: #161F2C; --ink: #E7ECF3; --muted: #9AA6B6; --rule: #273244;
+  --cobalt: #7D98F2; --cobalt-soft: #1E2A47; --gain: #4CC497; --gain-soft: #12302A;
+  --loss: #F0776B; --loss-soft: #3A1E1D; --flat: #6F7A8A; --caution-soft: #2E2612; --caution-ink: #E8C46A; --on-cobalt: #0E141D;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 400 15px/1.5 "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+button, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; border-radius: 4px; }
+
+/* ---------- top bar ---------- */
+.top {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 14px 24px; border-bottom: 1px solid var(--rule); background: var(--panel);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+.brand h1 { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
+.brand span { color: var(--muted); font-size: 13px; }
+.live { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+.live i { width: 8px; height: 8px; border-radius: 50%; background: var(--flat); }
+.live.on i { background: var(--gain); box-shadow: 0 0 0 0 var(--gain); animation: ping 2s infinite; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gain) 60%, transparent); } 100% { box-shadow: 0 0 0 7px transparent; } }
+.btn {
+  border: 1px solid var(--rule); background: var(--panel); border-radius: var(--radius-sm);
+  padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.btn:hover { border-color: var(--cobalt); }
+.btn.primary { background: var(--cobalt); border-color: var(--cobalt); color: var(--on-cobalt); }
+
+.demo-note {
+  background: var(--caution-soft); color: var(--caution-ink);
+  padding: 8px 24px; font-size: 13px; border-bottom: 1px solid var(--rule);
+}
+
+/* ---------- layout ---------- */
+.shell {
+  display: grid; grid-template-columns: 240px minmax(0, 1fr) 380px; gap: 20px;
+  padding: 20px 24px; max-width: 1480px; margin: 0 auto; align-items: start;
+}
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius-lg); }
+.panel > header { padding: 14px 16px 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.panel h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.panel .sub { color: var(--muted); font-size: 12.5px; }
+
+/* watchlist */
+.watch ul { list-style: none; margin: 0; padding: 0 8px 8px; }
+.watch li { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--radius-sm); cursor: pointer; }
+.watch li:hover, .watch li[aria-current="true"] { background: var(--cobalt-soft); }
+.watch .sym { font-weight: 800; width: 52px; letter-spacing: 0.01em; }
+.watch .nm { color: var(--muted); font-size: 12.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch .cnt { font-size: 12px; font-weight: 700; min-width: 22px; text-align: center; padding: 1px 6px; border-radius: 10px; background: var(--page); color: var(--muted); }
+.watch .cnt.hot { background: var(--cobalt); color: var(--on-cobalt); }
+.watch .rm { opacity: 0; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 16px; line-height: 1; }
+.watch li:hover .rm, .watch .rm:focus-visible { opacity: 1; }
+.add { display: flex; gap: 6px; padding: 4px 16px 16px; }
+.add input { flex: 1; min-width: 0; border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 6px 10px; background: var(--page); text-transform: uppercase; }
+.add input::placeholder { text-transform: none; }
+.form-error { color: var(--loss); font-size: 12.5px; padding: 0 16px 12px; margin: -8px 0 0; }
+
+/* funnel: how much the pipeline filtered */
+.funnel { display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--rule); }
+.funnel div { padding: 10px 14px; border-right: 1px solid var(--rule); }
+.funnel div:last-child { border-right: 0; }
+.funnel b { display: block; font-size: 20px; font-weight: 800; line-height: 1.2; }
+.funnel span { font-size: 12px; color: var(--muted); }
+
+/* feed */
+.feed-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; flex-wrap: wrap; }
+.tabs { display: inline-flex; background: var(--page); border-radius: var(--radius-sm); padding: 3px; }
+.tabs button { border: 0; background: none; padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(23,33,49,.12); }
+.filter-chip { font-size: 12.5px; color: var(--muted); }
+.filter-chip button { border: 0; background: none; color: var(--cobalt); cursor: pointer; font-weight: 600; padding: 0 4px; }
+.feed { list-style: none; margin: 0; padding: 0; }
+.alert {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px;
+  padding: 16px; border-top: 1px solid var(--rule);
+}
+.alert.unread { background: linear-gradient(90deg, var(--cobalt-soft), transparent 40%); }
+.alert.arrived { animation: arrive 1.6s ease-out; }
+@keyframes arrive { from { background-color: var(--cobalt-soft); transform: translateY(-6px); opacity: 0; } 20% { transform: none; opacity: 1; } to { background-color: transparent; } }
+
+/* The impact meter: five rising bars, filled to the impact level, coloured by sentiment. */
+.meter { display: flex; align-items: flex-end; gap: 2px; height: 30px; padding-top: 2px; }
+.meter i { width: 5px; border-radius: 2px; background: var(--rule); }
+.meter i:nth-child(1) { height: 20%; } .meter i:nth-child(2) { height: 40%; } .meter i:nth-child(3) { height: 60%; }
+.meter i:nth-child(4) { height: 80%; } .meter i:nth-child(5) { height: 100%; }
+.meter.pos i.on { background: var(--gain); } .meter.neg i.on { background: var(--loss); } .meter.neu i.on { background: var(--ink); }
+.meter-label { font-size: 11px; color: var(--muted); margin-top: 4px; text-align: center; }
+
+.alert .line1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+.tick { font-weight: 800; font-size: 13px; padding: 1px 7px; border-radius: 5px; background: var(--page); }
+.tick.pos { background: var(--gain-soft); color: var(--gain); } .tick.neg { background: var(--loss-soft); color: var(--loss); }
+.kind { font-size: 12px; color: var(--muted); }
+.pushed { font-size: 11.5px; font-weight: 700; color: var(--cobalt); }
+.alert h3 { font-size: 16px; font-weight: 700; line-height: 1.35; margin: 2px 0 4px; letter-spacing: -0.005em; }
+.alert h3 a { text-decoration: none; }
+.alert h3 a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.alert p { margin: 0 0 6px; max-width: 72ch; }
+.why { color: var(--muted); font-size: 14px; }
+.meta { font-size: 12.5px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+.meta .src { color: var(--ink); font-weight: 600; }
+.empty { padding: 32px 16px; color: var(--muted); text-align: center; border-top: 1px solid var(--rule); }
+
+/* digest */
+.digest-group { padding: 12px 16px; border-top: 1px solid var(--rule); }
+.digest-group h3 { font-size: 14px; margin: 0 0 6px; }
+.digest-group ul { margin: 0; padding-left: 18px; }
+.digest-group li { margin-bottom: 4px; }
+.digest-group li span { color: var(--muted); font-size: 12.5px; }
+
+/* chat */
+.chat { position: sticky; top: 20px; display: flex; flex-direction: column; max-height: calc(100vh - 40px); }
+.msgs { flex: 1; overflow-y: auto; padding: 4px 16px 12px; display: flex; flex-direction: column; gap: 12px; min-height: 260px; }
+.msg { max-width: 92%; padding: 10px 12px; border-radius: 12px; white-space: pre-wrap; font-size: 14.5px; }
+.msg.user { align-self: flex-end; background: var(--cobalt); color: var(--on-cobalt); border-bottom-right-radius: 4px; }
+.msg.bot { align-self: flex-start; background: var(--page); border-bottom-left-radius: 4px; }
+.msg.bot .cite { display: inline-block; min-width: 18px; text-align: center; font-size: 11px; font-weight: 700; color: var(--cobalt); background: var(--cobalt-soft); border-radius: 4px; padding: 0 4px; text-decoration: none; vertical-align: 1px; }
+.sources { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--rule); font-size: 12.5px; white-space: normal; }
+.sources ol { margin: 0; padding-left: 18px; }
+.sources a { color: var(--muted); }
+.model-tag { font-size: 11.5px; color: var(--muted); margin-top: 6px; white-space: normal; }
+.suggest { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }
+.suggest button { border: 1px solid var(--rule); background: var(--panel); border-radius: 16px; padding: 4px 10px; font-size: 12.5px; cursor: pointer; color: var(--muted); }
+.suggest button:hover { border-color: var(--cobalt); color: var(--ink); }
+.ask { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--rule); }
+.ask input { flex: 1; min-width: 0; border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 8px 12px; background: var(--page); }
+.typing { color: var(--muted); font-size: 13px; }
+.disclaimer { font-size: 11.5px; color: var(--muted); padding: 0 16px 12px; margin: 0; }
+
+/* toast */
+.toast { position: fixed; left: 20px; bottom: 20px; background: var(--ink); color: var(--panel); padding: 10px 14px; border-radius: 10px; font-size: 13.5px; max-width: 360px; box-shadow: 0 6px 24px rgba(0,0,0,.2); opacity: 0; transform: translateY(8px); transition: .25s; pointer-events: none; z-index: 10; }
+.toast.show { opacity: 1; transform: none; }
+
+/* mobile nav */
+.mnav { display: none; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@media (max-width: 1180px) {
+  .shell { grid-template-columns: 220px minmax(0, 1fr); }
+  .chat { grid-column: 1 / -1; position: static; max-height: none; }
+}
+@media (max-width: 760px) {
+  .top { padding: 12px 16px; gap: 8px; }
+  .brand span, #notifyBtn, #themeBtn { display: none; }
+  .toast { left: 16px; right: 16px; bottom: 64px; max-width: none; }
+  .demo-note { padding: 8px 16px; }
+  .shell { grid-template-columns: 1fr; padding: 12px 16px 84px; gap: 12px; }
+  .shell > section { display: none; }
+  .shell > section.active { display: flex; flex-direction: column; }
+  .shell > section.active.feedwrap, .shell > section.active.watch { display: block; }
+  .chat { max-height: calc(100vh - 170px); }
+  .funnel { grid-template-columns: repeat(3, 1fr); }
+  .funnel div:nth-child(3) { border-right: 0; }
+  .funnel div:nth-child(n+4) { border-top: 1px solid var(--rule); }
+  .alert { grid-template-columns: 26px minmax(0,1fr); gap: 10px; padding: 14px 12px; }
+  .mnav { display: flex; position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--rule); z-index: 5; }
+  .mnav button { flex: 1; border: 0; background: none; padding: 12px 0 14px; font-weight: 600; font-size: 13.5px; color: var(--muted); }
+  .mnav button[aria-selected="true"] { color: var(--cobalt); box-shadow: inset 0 2px 0 var(--cobalt); }
+  .watch .rm { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><h1>Watchlist Assistant</h1><span id="engine">Loading…</span></div>
+  <span class="live" id="live"><i></i><span>Connecting</span></span>
+  <button class="btn" id="notifyBtn" type="button">Turn on desktop alerts</button>
+  <button class="btn" id="pauseBtn" type="button">Pause feed</button>
+  <button class="btn" id="resetBtn" type="button" hidden>Replay demo</button>
+  <button class="btn" id="themeBtn" type="button" aria-label="Switch colour theme">Theme</button>
+</div>
+<div class="demo-note" id="demoNote" hidden>Demo mode: headlines are synthetic sample data, not real news. Set <code>APP_MODE=live</code> to pull from Finnhub, Yahoo Finance and SEC EDGAR.</div>
+
+<main class="shell">
+  <section class="panel watch" id="watchPanel" aria-labelledby="wlTitle">
+    <header><h2 id="wlTitle">Watchlist</h2><span class="sub" id="wlCount"></span></header>
+    <ul id="watchlist"></ul>
+    <form class="add" id="addForm" autocomplete="off">
+      <label class="vh" for="addInput">Add a ticker</label>
+      <input id="addInput" placeholder="Add ticker, e.g. TSLA" maxlength="10">
+      <button class="btn" type="submit">Add</button>
+    </form>
+    <p class="form-error" id="addError" hidden></p>
+  </section>
+
+  <section class="panel feedwrap active" id="feedPanel" aria-labelledby="feedTitle">
+    <div class="feed-head">
+      <h2 id="feedTitle" class="vh">News feed</h2>
+      <div class="tabs" role="tablist" aria-label="Feed view">
+        <button role="tab" aria-selected="true" data-view="push">Alerts</button>
+        <button role="tab" aria-selected="false" data-view="all">All news</button>
+        <button role="tab" aria-selected="false" data-view="digest">Digest</button>
+      </div>
+      <span class="filter-chip" id="filterChip" hidden></span>
+    </div>
+    <div class="funnel" id="funnel" aria-label="What the pipeline did with incoming news">
+      <div><b id="fFetched">0</b><span>stories read</span></div>
+      <div><b id="fUntrusted">0</b><span>untrusted sources dropped</span></div>
+      <div><b id="fDup">0</b><span>duplicates grouped</span></div>
+      <div><b id="fPush">0</b><span>alerts sent</span></div>
+      <div><b id="fDigest">0</b><span>saved for digest</span></div>
+    </div>
+    <ul class="feed" id="feed" aria-live="polite"></ul>
+  </section>
+
+  <section class="panel chat" id="chatPanel" aria-labelledby="chatTitle">
+    <header><h2 id="chatTitle">Ask about your stocks</h2><span class="sub">Answers cite the news above</span></header>
+    <div class="msgs" id="msgs">
+      <div class="msg bot">Ask me what's happening with any stock on your watchlist. I'll answer from the news I've collected and link every source.</div>
+    </div>
+    <div class="suggest" id="suggest"></div>
+    <form class="ask" id="askForm" autocomplete="off">
+      <label class="vh" for="askInput">Your question</label>
+      <input id="askInput" placeholder="What's the latest on Nvidia?">
+      <button class="btn primary" type="submit">Ask</button>
+    </form>
+    <p class="disclaimer">For information only, not investment advice.</p>
+  </section>
+</main>
+
+<nav class="mnav" role="tablist" aria-label="Sections">
+  <button role="tab" aria-selected="false" data-target="watchPanel">Watchlist</button>
+  <button role="tab" aria-selected="true" data-target="feedPanel">Feed</button>
+  <button role="tab" aria-selected="false" data-target="chatPanel">Ask</button>
+</nav>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "#";
+const state = { alerts: [], view: "push", ticker: null, history: [], config: null, paused: false };
+
+const EVENT_LABEL = { "earnings": "Earnings", "guidance": "Guidance", "m&a": "M&A", "regulatory": "Regulatory", "legal": "Legal",
+  "product": "Product", "leadership": "Leadership", "analyst": "Analyst rating", "filing": "SEC filing", "partnership": "Partnership", "macro": "Macro", "other": "General" };
+
+function ago(iso) {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return new Date(iso).toLocaleDateString();
+}
+const tone = (x) => x > 0.15 ? "pos" : x < -0.15 ? "neg" : "neu";
+const toneWord = (x) => x > 0.15 ? "positive" : x < -0.15 ? "negative" : "neutral";
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3200);
+}
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (r.status === 204) return null;
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
+  return data;
+}
+
+/* ---------- rendering ---------- */
+function alertHTML(a, fresh) {
+  const art = a.article, e = art.enrichment || {};
+  const t = tone(e.sentiment || 0), imp = e.impact || 1;
+  const bars = [1,2,3,4,5].map((i) => `<i class="${i <= imp ? "on" : ""}"></i>`).join("");
+  const also = (art.also_reported_by || []).length ? `<span>Also reported by ${esc(art.also_reported_by.join(", "))}</span>` : "";
+  return `<li class="alert ${a.read ? "" : "unread"} ${fresh ? "arrived" : ""}" data-id="${esc(a.id)}">
+    <div><div class="meter ${t}" role="img" aria-label="Impact ${imp} of 5, ${toneWord(e.sentiment || 0)}">${bars}</div><div class="meter-label">${imp}/5</div></div>
+    <div>
+      <div class="line1"><span class="tick ${t}">${esc(a.ticker)}</span><span class="kind">${esc(EVENT_LABEL[e.event_type] || "General")}</span>${a.priority === "push" ? `<span class="pushed">Alert sent</span>` : ""}</div>
+      <h3><a href="${esc(safeUrl(art.url))}" target="_blank" rel="noopener">${esc(art.title)}</a></h3>
+      <p>${esc(e.summary || art.summary)}</p>
+      <p class="why">${esc(e.why_it_matters || "")}</p>
+      <div class="meta"><span class="src">${esc(art.source_name)}</span><span>${ago(art.published_at)}</span>${also}</div>
+    </div></li>`;
+}
+
+function renderFeed(freshId) {
+  const feed = $("#feed");
+  const chip = $("#filterChip");
+  chip.hidden = !state.ticker;
+  chip.innerHTML = state.ticker ? `Showing ${esc(state.ticker)} <button type="button" id="clearFilter">Show all</button>` : "";
+  if (state.view === "digest") return renderDigest();
+  let items = state.alerts;
+  if (state.view === "push") items = items.filter((a) => a.priority === "push");
+  if (state.ticker) items = items.filter((a) => a.ticker === state.ticker);
+  if (!items.length) {
+    const what = state.view === "push" ? "No alerts yet" : "No news yet";
+    feed.innerHTML = `<li class="empty">${what}${state.ticker ? ` for ${esc(state.ticker)}` : ""}. New stories appear here as soon as a trusted source reports them.</li>`;
+    return;
+  }
+  feed.innerHTML = items.map((a) => alertHTML(a, a.id === freshId)).join("");
+}
+
+async function renderDigest() {
+  const data = await api("/api/digest");
+  const groups = Object.entries(data).filter(([t]) => !state.ticker || t === state.ticker);
+  $("#feed").innerHTML = groups.length ? groups.map(([t, items]) => `<li class="digest-group"><h3>${esc(t)}</h3><ul>${
+    items.map((i) => `<li><a href="${esc(safeUrl(i.url))}" target="_blank" rel="noopener">${esc(i.title)}</a> <span>${esc(i.source)}</span></li>`).join("")
+  }</ul></li>`).join("") : `<li class="empty">Nothing in the digest. Lower-impact stories collect here so they don't interrupt you.</li>`;
+}
+
+async function renderWatchlist() {
+  const wl = await api("/api/watchlist");
+  $("#wlCount").textContent = `${wl.length} stocks`;
+  const counts = {};
+  state.alerts.forEach((a) => { if (a.priority === "push" && !a.read) counts[a.ticker] = (counts[a.ticker] || 0) + 1; });
+  $("#watchlist").innerHTML = wl.map((w) => `<li data-t="${esc(w.ticker)}" aria-current="${state.ticker === w.ticker}" tabindex="0" title="Show news for ${esc(w.ticker)}">
+      <span class="sym">${esc(w.ticker)}</span><span class="nm">${esc(w.name !== w.ticker ? w.name : "")}</span>
+      <span class="cnt ${counts[w.ticker] ? "hot" : ""}" aria-label="${counts[w.ticker] || 0} unread alerts">${counts[w.ticker] || 0}</span>
+      <button class="rm" type="button" data-rm="${esc(w.ticker)}" aria-label="Remove ${esc(w.ticker)}">×</button></li>`).join("");
+  const sugg = [wl[0] && `What's the latest on ${wl[0].name.split(" ")[0]}?`, "Anything big on my watchlist today?", wl[2] && `Any risks for ${wl[2].ticker}?`, "Should I sell MSFT?"].filter(Boolean);
+  $("#suggest").innerHTML = sugg.map((s) => `<button type="button">${esc(s)}</button>`).join("");
+}
+
+function renderMetrics(m) {
+  const p = m.pipeline || {};
+  $("#fFetched").textContent = p.fetched || 0;
+  $("#fUntrusted").textContent = p.untrusted || 0;
+  $("#fDup").textContent = (p.dup_story || 0);
+  $("#fPush").textContent = p.alert_push || 0;
+  $("#fDigest").textContent = p.alert_digest || 0;
+  state.paused = m.paused;
+  $("#pauseBtn").textContent = m.paused ? "Resume feed" : "Pause feed";
+}
+
+/* ---------- live updates ---------- */
+function connect() {
+  const live = $("#live");
+  const es = new EventSource("/api/stream");
+  es.addEventListener("hello", () => { live.classList.add("on"); live.lastChild.textContent = "Live"; });
+  es.addEventListener("alert", (ev) => {
+    const a = JSON.parse(ev.data);
+    if (state.alerts.some((x) => x.id === a.id)) return;
+    state.alerts.unshift(a);
+    renderFeed(a.id); renderWatchlist();
+    if (a.priority === "push") notify(a);
+  });
+  es.addEventListener("metrics", (ev) => renderMetrics(JSON.parse(ev.data)));
+  es.addEventListener("reset", () => { state.alerts = []; renderFeed(); renderWatchlist(); });
+  es.onerror = () => { live.classList.remove("on"); live.lastChild.textContent = "Reconnecting"; };
+}
+
+function notify(a) {
+  const e = a.article.enrichment || {};
+  toast(`${a.ticker}: ${a.article.title}`);
+  if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+    const n = new Notification(`${a.ticker} | ${EVENT_LABEL[e.event_type] || "News"}`, { body: a.article.title, tag: a.id });
+    n.onclick = () => { window.focus(); n.close(); };
+  }
+}
+
+/* ---------- chat ---------- */
+function botHTML(r) {
+  let text = esc(r.answer).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  const byN = Object.fromEntries((r.citations || []).map((c) => [c.n, c]));
+  text = text.replace(/\[(\d+)\]/g, (m, n) => byN[n] ? `<a class="cite" href="${esc(safeUrl(byN[n].url))}" target="_blank" rel="noopener" title="${esc(byN[n].title)}">${n}</a>` : m);
+  const src = (r.citations || []).length ? `<div class="sources"><ol>${r.citations.map((c) => `<li value="${c.n}"><a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener">${esc(c.title)}</a> (${esc(c.source)}, ${ago(c.published_at)})</li>`).join("")}</ol></div>` : "";
+  return `${text}${src}<div class="model-tag">${esc(r.model)}, ${r.latency_ms} ms</div>`;
+}
+
+async function ask(q) {
+  q = q.trim(); if (!q) return;
+  const msgs = $("#msgs");
+  msgs.insertAdjacentHTML("beforeend", `<div class="msg user">${esc(q)}</div><div class="msg bot typing" id="typing">Reading your news…</div>`);
+  msgs.scrollTop = msgs.scrollHeight;
+  try {
+    const r = await api("/api/chat", { method: "POST", body: JSON.stringify({ question: q, history: state.history.slice(-6) }) });
+    $("#typing").outerHTML = `<div class="msg bot">${botHTML(r)}</div>`;
+    state.history.push({ role: "user", content: q }, { role: "assistant", content: r.answer });
+  } catch (err) {
+    $("#typing").outerHTML = `<div class="msg bot">Couldn't get an answer: ${esc(err.message)}. Try again in a moment.</div>`;
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+/* ---------- events ---------- */
+$("#askForm").addEventListener("submit", (e) => { e.preventDefault(); const i = $("#askInput"); ask(i.value); i.value = ""; });
+$("#suggest").addEventListener("click", (e) => { if (e.target.matches("button")) ask(e.target.textContent); });
+
+$("#addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = $("#addInput"), err = $("#addError");
+  err.hidden = true;
+  try {
+    const r = await api("/api/watchlist", { method: "POST", body: JSON.stringify({ ticker: input.value }) });
+    input.value = "";
+    toast(`Added ${r.ticker}. Found ${r.backfill.new_alerts} recent ${r.backfill.new_alerts === 1 ? "story" : "stories"}.`);
+    await load();
+  } catch (ex) { err.textContent = ex.message; err.hidden = false; }
+});
+
+$("#watchlist").addEventListener("click", async (e) => {
+  const rm = e.target.closest("[data-rm]");
+  if (rm) {
+    await api(`/api/watchlist/${encodeURIComponent(rm.dataset.rm)}`, { method: "DELETE" });
+    if (state.ticker === rm.dataset.rm) state.ticker = null;
+    toast(`Removed ${rm.dataset.rm}`); renderWatchlist(); renderFeed(); return;
+  }
+  const li = e.target.closest("li[data-t]");
+  if (!li) return;
+  state.ticker = state.ticker === li.dataset.t ? null : li.dataset.t;
+  renderWatchlist(); renderFeed();
+  if (matchMedia("(max-width: 760px)").matches) showSection("feedPanel");
+});
+$("#watchlist").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches("li")) e.target.click(); });
+$("#filterChip").addEventListener("click", (e) => { if (e.target.id === "clearFilter") { state.ticker = null; renderWatchlist(); renderFeed(); } });
+
+document.querySelector(".tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  state.view = b.dataset.view;
+  document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-selected", x === b));
+  renderFeed();
+});
+
+$("#feed").addEventListener("click", (e) => {
+  const li = e.target.closest(".alert.unread");
+  if (!li) return;
+  li.classList.remove("unread");
+  const a = state.alerts.find((x) => x.id === li.dataset.id);
+  if (a) { a.read = true; api(`/api/alerts/${a.id}/read`, { method: "POST" }); renderWatchlist(); }
+});
+
+$("#notifyBtn").addEventListener("click", async () => {
+  if (!("Notification" in window)) return toast("This browser doesn't support desktop notifications.");
+  const p = await Notification.requestPermission();
+  $("#notifyBtn").textContent = p === "granted" ? "Desktop alerts on" : "Turn on desktop alerts";
+  toast(p === "granted" ? "Desktop alerts on. You'll be notified when this tab is in the background." : "Desktop alerts are blocked in your browser settings.");
+});
+$("#pauseBtn").addEventListener("click", async () => {
+  const r = await api("/api/pause", { method: "POST", body: JSON.stringify({ paused: !state.paused }) });
+  state.paused = r.paused; $("#pauseBtn").textContent = r.paused ? "Resume feed" : "Pause feed";
+  toast(r.paused ? "Feed paused" : "Feed resumed");
+});
+$("#resetBtn").addEventListener("click", async () => {
+  await api("/api/demo/reset", { method: "POST" });
+  state.alerts = []; await load(); toast("Demo replaying from the start");
+});
+$("#themeBtn").addEventListener("click", () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("theme", root.dataset.theme); } catch {}
+});
+try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+
+function showSection(id) {
+  document.querySelectorAll(".shell > section").forEach((s) => s.classList.toggle("active", s.id === id));
+  document.querySelectorAll(".mnav button").forEach((b) => b.setAttribute("aria-selected", b.dataset.target === id));
+}
+document.querySelector(".mnav").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) showSection(b.dataset.target); });
+
+async function load() {
+  const [cfg, alerts, metrics] = await Promise.all([api("/api/config"), api("/api/alerts?limit=200"), api("/api/metrics")]);
+  state.config = cfg; state.alerts = alerts;
+  $("#engine").textContent = `${cfg.mode === "live" ? "Live sources" : "Demo"}, ${cfg.llm}`;
+  $("#demoNote").hidden = !cfg.synthetic_data;
+  $("#resetBtn").hidden = !cfg.synthetic_data;
+  if ("Notification" in window && Notification.permission === "granted") $("#notifyBtn").textContent = "Desktop alerts on";
+  renderMetrics(metrics); renderFeed(); renderWatchlist();
+}
+load().then(connect).catch((e) => toast(`Couldn't load: ${e.message}`));
+setInterval(() => document.querySelectorAll(".meta span:nth-child(2)").length && renderFeed(), 60000);
+</script>
+</body>
+</html>
